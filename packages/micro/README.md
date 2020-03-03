@@ -1,4 +1,8 @@
-**The below readme is the documentation for the `canary` (prerelease) branch. To view the documentation for the latest stable Micro version visit [npmjs.com/micro](https://npmjs.com/micro).**
+**Disclaimer: Micro was created for use within containers and is not intended for use in serverless environments. For those using ZEIT Now, this means that there is no requirement to use Micro in your projects as the benefits it provides are not applicable to the platform. Utility features provided by Micro, such as `json`, are readily available in the form of [Serverless Function helpers](https://zeit.co/docs/runtimes#official-runtimes/node-js/node-js-request-and-response-objects).**
+
+---
+
+This readme is the documentation for the `canary` (prerelease) branch. To view the documentation for the latest stable Micro version visit [npmjs.com/micro](https://npmjs.com/micro).
 
 ---
 
