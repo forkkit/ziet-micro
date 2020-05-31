@@ -1,19 +1,14 @@
 // Packages
 const http = require('http');
 const test = require('ava');
-const request = require('request-promise');
+const fetch = require('node-fetch');
 const sleep = require('then-sleep');
 const resumer = require('resumer');
 const listen = require('test-listen');
 const micro = require('../packages/micro/lib');
+const {getUrl} = require('./_test-utils')({http, micro, listen});
 
 const {send, sendError, buffer, json} = micro;
-
-const getUrl = fn => {
-	const srv = new http.Server(micro(fn));
-
-	return listen(srv);
-};
 
 test('send(200, <String>)', async t => {
 	const fn = async (req, res) => {
@@ -21,9 +16,10 @@ test('send(200, <String>)', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url);
+	const body = await res.text();
 
-	t.deepEqual(res, 'woot');
+	t.deepEqual(body, 'woot');
 });
 
 test('send(200, <Object>)', async t => {
@@ -35,9 +31,7 @@ test('send(200, <Object>)', async t => {
 
 	const url = await getUrl(fn);
 
-	const res = await request(url, {
-		json: true
-	});
+	const res = await fetch(url).then(r => r.json());
 
 	t.deepEqual(res, {
 		a: 'b'
@@ -51,9 +45,7 @@ test('send(200, <Number>)', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {
-		json: true
-	});
+	const res = await fetch(url).then(r => r.json());
 
 	t.deepEqual(res, 4);
 });
@@ -64,7 +56,7 @@ test('send(200, <Buffer>)', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'muscle');
 });
@@ -75,7 +67,7 @@ test('send(200, <Stream>)', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'waterfall');
 });
@@ -87,18 +79,15 @@ test('send(<Number>)', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 404);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 404);
 });
 
 test('return <String>', async t => {
 	const fn = async () => 'woot';
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'woot');
 });
@@ -110,7 +99,7 @@ test('return <Promise>', async t => {
 	});
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'I Promise');
 });
@@ -119,7 +108,7 @@ test('sync return <String>', async t => {
 	const fn = () => 'argon';
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'argon');
 });
@@ -128,7 +117,7 @@ test('return empty string', async t => {
 	const fn = async () => '';
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, '');
 });
@@ -139,9 +128,7 @@ test('return <Object>', async t => {
 	});
 
 	const url = await getUrl(fn);
-	const res = await request(url, {
-		json: true
-	});
+	const res = await fetch(url).then(r => r.json());
 
 	t.deepEqual(res, {
 		a: 'b'
@@ -155,9 +142,7 @@ test('return <Number>', async t => {
 
 
 	const url = await getUrl(fn);
-	const res = await request(url, {
-		json: true
-	});
+	const res = await fetch(url).then(r => r.json());
 
 	t.deepEqual(res, 4);
 });
@@ -166,7 +151,7 @@ test('return <Buffer>', async t => {
 	const fn = async () => Buffer.from('Hammer');
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'Hammer');
 });
@@ -178,7 +163,7 @@ test('return <Stream>', async t => {
 			.end();
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'River');
 });
@@ -187,10 +172,11 @@ test('return <null>', async t => {
 	const fn = async () => null;
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
+	const body = await res.text();
 
-	t.is(res.statusCode, 204);
-	t.is(res.body, '');
+	t.is(res.status, 204);
+	t.is(body, '');
 });
 
 test('return <null> calls res.end once', async t => {
@@ -212,11 +198,9 @@ test('throw with code', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 402);
-	}
+	const {status} = await fetch(url);
+
+	t.deepEqual(status, 402);
 });
 
 test('throw (500)', async t => {
@@ -226,11 +210,8 @@ test('throw (500)', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('throw (500) sync', async t => {
@@ -240,11 +221,8 @@ test('throw (500) sync', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('send(200, <Stream>) with error on same tick', async t => {
@@ -258,12 +236,8 @@ test('send(200, <Stream>) with error on same tick', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-		t.fail();
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('send(200, <Stream>) custom stream', async t => {
@@ -290,12 +264,8 @@ test('send(200, <Stream>) custom stream', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-		t.fail();
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('custom error', async t => {
@@ -313,7 +283,7 @@ test('custom error', async t => {
 	};
 
 	const url = await getUrl(handleErrors(fn));
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'My custom error!');
 });
@@ -333,7 +303,7 @@ test('custom async error', async t => {
 	};
 
 	const url = await getUrl(handleErrors(fn));
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'My custom error!');
 });
@@ -346,17 +316,14 @@ test('json parse error', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url, {
-			method: 'POST',
-			body: '{ "bad json" }',
-			headers: {
-				'Content-Type': 'application/json'
-			}
-		});
-	} catch (err) {
-		t.deepEqual(err.statusCode, 400);
-	}
+	const {status} = await fetch(url, {
+		method: 'POST',
+		body: '{ "bad json" }',
+		headers: {
+			'Content-Type': 'application/json'
+		}
+	});
+	t.deepEqual(status, 400);
 });
 
 test('json', async t => {
@@ -370,15 +337,15 @@ test('json', async t => {
 
 	const url = await getUrl(fn);
 
-	const body = await request(url, {
+	const res = await fetch(url, {
 		method: 'POST',
-		body: {
+		body: JSON.stringify({
 			some: {
 				cool: 'json'
 			}
-		},
-		json: true
+		})
 	});
+	const body = await res.json();
 
 	t.deepEqual(body.response, 'json');
 });
@@ -396,15 +363,15 @@ test('json limit (below)', async t => {
 
 	const url = await getUrl(fn);
 
-	const body = await request(url, {
+	const res = await fetch(url, {
 		method: 'POST',
-		body: {
+		body: JSON.stringify({
 			some: {
 				cool: 'json'
 			}
-		},
-		json: true
+		})
 	});
+	const body = await res.json();
 
 	t.deepEqual(body.response, 'json');
 });
@@ -423,15 +390,15 @@ test('json limit (over)', async t => {
 	};
 
 	const url = await getUrl(fn);
-	await request(url, {
+	const res = await fetch(url, {
 		method: 'POST',
-		body: {
+		body: JSON.stringify({
 			some: {
 				cool: 'json'
 			}
-		},
-		json: true
+		})
 	});
+	t.deepEqual(res.status, 200);
 });
 
 test('json circular', async t => {
@@ -446,13 +413,8 @@ test('json circular', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url, {
-			json: true
-		});
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('no async', async t => {
@@ -463,9 +425,7 @@ test('no async', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const obj = await request(url, {
-		json: true
-	});
+	const obj = await fetch(url).then(r => r.json());
 
 	t.deepEqual(obj.a, 'b');
 });
@@ -488,17 +448,16 @@ test('limit included in error', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const requestPromise = request(url, {
+	const res = await fetch(url, {
 		method: 'POST',
-		body: {
+		body: JSON.stringify({
 			some: {
 				cool: 'json'
 			}
-		},
-		json: true
+		})
 	});
 
-	await t.throws(requestPromise);
+	t.deepEqual(res.status, 500);
 });
 
 test('support for status fallback in errors', async t => {
@@ -509,11 +468,8 @@ test('support for status fallback in errors', async t => {
 	};
 
 	const url = await getUrl(fn);
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 403);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 403);
 });
 
 test('support for non-Error errors', async t => {
@@ -523,11 +479,8 @@ test('support for non-Error errors', async t => {
 	};
 
 	const url = await getUrl(fn);
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 500);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 500);
 });
 
 test('json from rawBodyMap works', async t => {
@@ -543,15 +496,15 @@ test('json from rawBodyMap works', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const body = await request(url, {
+	const res = await fetch(url, {
 		method: 'POST',
-		body: {
+		body: JSON.stringify({
 			some: {
 				cool: 'json'
 			}
-		},
-		json: true
+		})
 	});
+	const body = await res.json();
 
 	t.deepEqual(body.response, 'json');
 });
@@ -564,9 +517,10 @@ test('statusCode defaults to 200', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
-	t.is(res.body, 'woot');
-	t.is(res.statusCode, 200);
+	const res = await fetch(url);
+	const body = await res.text();
+	t.is(body, 'woot');
+	t.is(res.status, 200);
 });
 
 test('statusCode on response works', async t => {
@@ -577,11 +531,8 @@ test('statusCode on response works', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.deepEqual(err.statusCode, 400);
-	}
+	const {status} = await fetch(url);
+	t.deepEqual(status, 400);
 });
 
 test('Content-Type header is preserved on string', async t => {
@@ -591,9 +542,9 @@ test('Content-Type header is preserved on string', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
 
-	t.is(res.headers['content-type'], 'text/html');
+	t.is(res.headers.get('content-type'), 'text/html');
 });
 
 test('Content-Type header is preserved on stream', async t => {
@@ -605,9 +556,9 @@ test('Content-Type header is preserved on stream', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
 
-	t.is(res.headers['content-type'], 'text/html');
+	t.is(res.headers.get('content-type'), 'text/html');
 });
 
 test('Content-Type header is preserved on buffer', async t => {
@@ -617,9 +568,9 @@ test('Content-Type header is preserved on buffer', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
 
-	t.is(res.headers['content-type'], 'text/html');
+	t.is(res.headers.get('content-type'), 'text/html');
 });
 
 test('Content-Type header is preserved on object', async t => {
@@ -629,9 +580,9 @@ test('Content-Type header is preserved on object', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
 
-	t.is(res.headers['content-type'], 'text/html');
+	t.is(res.headers.get('content-type'), 'text/html');
 });
 
 test('res.end is working', async t => {
@@ -640,7 +591,7 @@ test('res.end is working', async t => {
 	};
 
 	const url = await getUrl(fn);
-	const res = await request(url);
+	const res = await fetch(url).then(r => r.text());
 
 	t.deepEqual(res, 'woot');
 });
@@ -650,12 +601,10 @@ test('json should throw 400 on empty body with no headers', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url);
-	} catch (err) {
-		t.is(err.message, '400 - "Invalid JSON"');
-		t.is(err.statusCode, 400);
-	}
+	const res = await fetch(url);
+	const body = await res.text();
+	t.is(body, 'Invalid JSON');
+	t.is(res.status, 400);
 });
 
 test('buffer should throw 400 on invalid encoding', async t => {
@@ -663,26 +612,26 @@ test('buffer should throw 400 on invalid encoding', async t => {
 
 	const url = await getUrl(fn);
 
-	try {
-		await request(url, {
-			method: 'POST',
-			body: '❤️'
-		});
-	} catch (err) {
-		t.is(err.message, '400 - "Invalid body"');
-		t.is(err.statusCode, 400);
-	}
+	const res = await fetch(url, {
+		method: 'POST',
+		body: '❤️'
+	});
+	const body = await res.text();
+	t.is(body, 'Invalid body');
+	t.is(res.status, 400);
 });
 
 test('buffer works', async t => {
 	const fn = async req => buffer(req);
 	const url = await getUrl(fn);
-	t.is(await request(url, {body: '❤️'}), '❤️');
+	const res = await fetch(url, {method: 'POST', body: '❤️'});
+	const body = await res.text();
+	t.is(body, '❤️');
 });
 
 test('Content-Type header for JSON is set', async t => {
 	const url = await getUrl(() => ({}));
-	const res = await request(url, {resolveWithFullResponse: true});
+	const res = await fetch(url);
 
-	t.is(res.headers['content-type'], 'application/json; charset=utf-8');
+	t.is(res.headers.get('content-type'), 'application/json; charset=utf-8');
 });
